@@ -120,12 +120,12 @@ export default function HomePage() {
                     <ArrowRight size={22} className="ml-2" />
                   </Button>
                 </Link>
-                <Link href="/dashboard">
+                <Link href="/lessons">
                   <Button
                     variant="outline"
                     className="text-[#4F7C57] border-[#4F7C57] text-lg px-8 py-6 rounded-2xl"
                   >
-                    View Progress
+                    Browse Lessons
                   </Button>
                 </Link>
               </>

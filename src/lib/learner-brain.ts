@@ -23,8 +23,8 @@ import type {
   EngagementModel,
   InteractionEvent,
   AdaptationLogEntry,
-  Session,
 } from "@/db/schema";
+import { buildPersonalityPrompt } from "./panda-personality";
 
 // ══════════════════════════════════════════════════════════════
 // Types
@@ -334,7 +334,6 @@ function updateAcademicFromEvent(input: InteractionInput): void {
   const exposureCount = (existing?.exposure_count ?? 0) + 1;
   const prevMastery = existing?.mastery_estimate ?? 0.3;
   const prevConfidence = existing?.confidence_estimate ?? 0.5;
-  const prevHintDep = existing?.hint_dependence ?? 0;
   const prevFrustration = existing?.frustration_risk ?? 0;
   const prevBoredom = existing?.boredom_risk ?? 0;
   const prevRetention = existing?.retention_strength ?? 0.5;
@@ -380,8 +379,8 @@ function updateAcademicFromEvent(input: InteractionInput): void {
   const newConfidence = clamp(prevConfidence + confidenceDelta, 0, 1);
 
   // ── Consecutive tracking ──
-  let consecCorrect = wasCorrect ? prevConsecCorrect + 1 : 0;
-  let consecIncorrect = wasCorrect === false ? prevConsecIncorrect + 1 : 0;
+  const consecCorrect = wasCorrect ? prevConsecCorrect + 1 : 0;
+  const consecIncorrect = wasCorrect === false ? prevConsecIncorrect + 1 : 0;
 
   // ── Correctness rate (exponential moving average) ──
   const alpha = 0.15; // weight of new observation
@@ -1081,27 +1080,18 @@ function buildExplainability(
 // ══════════════════════════════════════════════════════════════
 
 export function buildDeepSystemPrompt(context: TutorContext): string {
-  const { profile: p, academicSnapshot: a, communicationSnapshot: c, engagementSnapshot: e, adaptation: ad } = context;
+  const { profile: p, academicSnapshot: a, communicationSnapshot: c, adaptation: ad } = context;
 
   const name = p.nickname;
   const age = p.age;
   const grade = p.grade;
 
-  // Vocabulary calibration
-  const vocabLevel = c.vocabComplexity < 0.3 ? "very simple" : c.vocabComplexity < 0.6 ? "age-appropriate" : "slightly advanced";
-  const sentenceGuide = c.sentenceLength < 0.3 ? "1-2 short sentences per idea" : c.sentenceLength < 0.6 ? "2-4 sentences per idea" : "3-6 sentences per idea";
+  const personalityBlock = buildPersonalityPrompt(
+    name, age, c.vocabComplexity, c.sentenceLength,
+    p.interests, p.favoriteAnimals, p.favoriteColors,
+  );
 
-  // Format instructions
-  const formatGuide = c.preferredFormats.length > 0
-    ? `${name} learns best through: ${c.preferredFormats.join(", ")}. Favor these formats.`
-    : "Use a mix of teaching formats.";
-
-  // Discovery style
-  const discoveryGuide = c.preferredDiscoveryStyle === "direct"
-    ? "Give the answer or key concept first, then explain. This child prefers direct answers."
-    : "Guide discovery with questions and hints before revealing the answer. This child enjoys figuring things out.";
-
-  // Mastery summary
+  // ── Mastery summary ──
   const masteryLines = Object.entries(a.subjectMastery)
     .map(([subj, data]) => {
       const flags: string[] = [];
@@ -1111,19 +1101,17 @@ export function buildDeepSystemPrompt(context: TutorContext): string {
     })
     .join("\n");
 
-  // Weak spots
   const weakLines = context.academicSnapshot.weakestSubtopics
     .map((w) => `  - ${w.subject}/${w.subtopic}: ${pct(w.mastery)} mastery${w.misconceptions.length > 0 ? ` (misconceptions: ${w.misconceptions.join(", ")})` : ""}`)
     .join("\n");
 
-  // Tone instruction
+  // ── Adaptation instructions ──
   const toneMap = {
     warm_supportive: "Be extra warm, patient, and encouraging. Celebrate every small win. Offer lots of reassurance.",
     balanced: "Be friendly and encouraging with balanced warmth. Celebrate successes but also gently push forward.",
     challenging_playful: "Be playful and slightly challenging. Use humor and friendly competition. This child is ready to be pushed.",
   };
 
-  // Scaffolding
   const scaffoldMap = {
     heavy: "Break everything into tiny steps. Give examples before asking questions. Provide fill-in-the-blank style guidance.",
     moderate: "Provide structure but leave room for thinking. Give 1-2 hints if needed.",
@@ -1131,7 +1119,6 @@ export function buildDeepSystemPrompt(context: TutorContext): string {
     none: "Let the child work independently. Only help if explicitly asked.",
   };
 
-  // Hint strategy
   const hintMap = {
     provide_immediately: "Provide hints proactively within your explanations — this child needs scaffolding right now.",
     offer_first: "Offer hints ('Would you like a hint?') but let the child try first.",
@@ -1139,76 +1126,69 @@ export function buildDeepSystemPrompt(context: TutorContext): string {
     withhold: "This child is hint-independent. Let them struggle productively before offering help.",
   };
 
-  // Encouragement
   const encourageMap = {
-    high: `Extra praise! Use enthusiastic language: "Amazing job!", "Your brain is growing like bamboo!" Celebrate effort, not just correctness. ${c.praiseStyle === "enthusiastic" ? "Use exclamation marks and emojis freely." : c.praiseStyle === "calm" ? "Keep praise genuine but calm." : "Be encouraging in a friendly, warm way."}`,
+    high: `Extra praise! Celebrate effort, not just correctness. ${c.praiseStyle === "enthusiastic" ? "Use exclamation marks and emojis freely." : c.praiseStyle === "calm" ? "Keep praise genuine but calm." : "Be encouraging in a friendly, warm way."}`,
     medium: "Regular encouragement. Acknowledge good work naturally without over-praising.",
-    low: "Light encouragement. This child is confident — they don't need heavy praise. A simple 'nice' or 'good thinking' is enough.",
+    low: "Light encouragement. A simple 'nice' or 'good thinking' is enough.",
   };
 
-  return `You are Panda 🐼, a brilliant, patient, and deeply caring AI tutor for children. You know ${name} well and adapt everything to them.
+  const formatGuide = c.preferredFormats.length > 0
+    ? `${name} learns best through: ${c.preferredFormats.join(", ")}.`
+    : "Use a mix of teaching formats.";
 
-## Identity & Safety
-- You are Panda — a friendly, wise panda who loves bamboo, learning, and helping kids grow.
-- NEVER discuss mature, violent, scary, or inappropriate topics.
-- NEVER shame, pressure, or make ${name} feel bad about mistakes.
-- NEVER pretend to replace parents, teachers, or therapists.
-- If asked something unsafe or off-topic, gently redirect: "That's a great question for a grown-up! Let's get back to learning."
+  const discoveryGuide = c.preferredDiscoveryStyle === "direct"
+    ? "Give the answer first, then explain. This child prefers direct answers."
+    : "Guide discovery with questions before revealing the answer.";
+
+  // ── Assemble the full prompt ──
+  return `${personalityBlock}
+
+---
 
 ## About ${name}
 - Name: ${name} | Age: ${age} | Grade: ${grade}
-- Interests: ${p.interests.length > 0 ? p.interests.join(", ") : "exploring everything!"}
-- Favorite animals: ${p.favoriteAnimals.length > 0 ? p.favoriteAnimals.join(", ") : "all animals"}
 - Favorite subjects: ${p.favoriteSubjects.length > 0 ? p.favoriteSubjects.join(", ") : "many things"}
 - Subjects they find harder: ${p.leastFavoriteSubjects.length > 0 ? p.leastFavoriteSubjects.join(", ") : "none noted"}
 ${p.parentNotes ? `- Parent notes: ${p.parentNotes}` : ""}
-${p.learningSupport ? `- Learning support: ${p.learningSupport}` : ""}
+${p.learningSupport ? `- Learning support needs: ${p.learningSupport}` : ""}
 
 ## Academic State
-${masteryLines || "  No mastery data yet — treat as first-time learner."}
-${weakLines ? `\nWeak areas needing gentle attention:\n${weakLines}` : ""}
+${masteryLines || "  No mastery data yet — treat as a first-time learner and go easy."}
+${weakLines ? `\nWeak areas (approach gently):\n${weakLines}` : ""}
 ${context.academicSnapshot.strongestSubtopics.length > 0 ? `\nStrong areas to build on: ${context.academicSnapshot.strongestSubtopics.map((s) => `${s.subject}/${s.subtopic}`).join(", ")}` : ""}
-- Overall hint dependence: ${pct(a.hintDependenceAvg)} — ${a.hintDependenceAvg > 0.5 ? "still relies on hints, provide scaffolding" : "growing independence, fade hints"}
-- Retention strength: ${pct(a.retentionStrengthAvg)} — ${a.retentionStrengthAvg < 0.4 ? "material fading fast, needs review" : "retaining well"}
+- Hint dependence: ${pct(a.hintDependenceAvg)} — ${a.hintDependenceAvg > 0.5 ? "still relies on hints, provide scaffolding" : "growing independent, fade hints"}
+- Retention: ${pct(a.retentionStrengthAvg)} — ${a.retentionStrengthAvg < 0.4 ? "material fading, needs review" : "retaining well"}
 
-## Communication Preferences
-- Vocabulary: Use ${vocabLevel} words
-- Sentence length: ${sentenceGuide}
+## Communication Style
 - ${formatGuide}
 - ${discoveryGuide}
-- Verbosity: ${c.verbosity < 0.3 ? "Keep responses very short and punchy." : c.verbosity < 0.7 ? "Moderate length responses." : "Detailed explanations are welcome."}
+- Verbosity: ${c.verbosity < 0.3 ? "Keep responses very short." : c.verbosity < 0.7 ? "Moderate length." : "Detailed explanations welcome."}
 
 ## Current Adaptation
-- Difficulty: ${ad.difficultyLevel}
+- Difficulty: **${ad.difficultyLevel}**
 - ${toneMap[ad.tone]}
 - Scaffolding: ${scaffoldMap[ad.scaffoldingLevel]}
 - Hints: ${hintMap[ad.hintStrategy]}
 - ${encourageMap[ad.encouragementIntensity]}
-${ad.useInterests && ad.interestToUse ? `- Weave ${ad.interestToUse} into examples when it fits naturally.` : ""}
-${ad.misconceptionRemediation ? `- ⚠️ ACTIVE MISCONCEPTION to address: "${ad.misconceptionRemediation}". Address this specifically using step-by-step explanation. Don't just correct — help ${name} understand WHY their thinking was off.` : ""}
-${ad.reviewMode ? "- 📖 REVIEW MODE: Reinforce fundamentals before introducing new concepts." : ""}
-${ad.challengeMode ? "- 🚀 CHALLENGE MODE: Push boundaries. Offer stretch problems and open-ended questions." : ""}
+${ad.useInterests && ad.interestToUse ? `- Weave **${ad.interestToUse}** into examples when it fits naturally.` : ""}
+${ad.misconceptionRemediation ? `\n⚠️ **ACTIVE MISCONCEPTION:** "${ad.misconceptionRemediation}"
+Address this specifically. Don't just correct — help ${name} understand WHY their thinking was off. Use the mistake sandwich: acknowledge what's right → pinpoint the misunderstanding → reteach → let them retry.` : ""}
+${ad.reviewMode ? "\n📖 **REVIEW MODE:** Reinforce fundamentals before introducing anything new." : ""}
+${ad.challengeMode ? "\n🚀 **CHALLENGE MODE:** Push boundaries. Stretch problems. Open-ended questions." : ""}
 
 ## Current Goal
 ${context.currentGoal}
 
-## Recent Mistakes to Be Aware Of
-${context.recentMistakes.length > 0 ? context.recentMistakes.slice(0, 5).map((m) => `  - ${m.subject}/${m.subtopic}${m.misconception ? `: misconception "${m.misconception}"` : ""}`).join("\n") : "  None recently — great progress!"}
+## Recent Mistakes
+${context.recentMistakes.length > 0 ? context.recentMistakes.slice(0, 5).map((m) => `  - ${m.subject}/${m.subtopic}${m.misconception ? `: "${m.misconception}"` : ""}`).join("\n") : "  None recently — great progress!"}
 
 ## What Has Worked Before
 ${context.successfulStrategies.length > 0 ? context.successfulStrategies.join(", ") : "Still learning what works best."}
-${context.relatedMasteredConcepts.length > 0 ? `\nAlready mastered (can reference): ${context.relatedMasteredConcepts.join(", ")}` : ""}
+${context.relatedMasteredConcepts.length > 0 ? `\nAlready mastered (can reference as building blocks): ${context.relatedMasteredConcepts.join(", ")}` : ""}
 
-## Teaching Rules
-1. One concept at a time. Check understanding before advancing.
-2. Use ${name}'s interests in examples whenever flagged above.
-3. Ask questions back — "Does that make sense?" "Want to try one?"
-4. When they struggle: "That's tricky! Let's figure it out together." Never: "That's wrong."
-5. When they succeed: Celebrate proportional to effort, not just correctness.
-6. Keep responses concise for a ${age}-year-old: aim for ${age <= 7 ? "2-4" : age <= 10 ? "3-6" : "4-8"} sentences unless explaining something complex.
-7. For each interaction, internally track: was this answer right/wrong? was there a misconception? what format worked?
+---
 
-Remember: ${name} should leave every conversation feeling smarter and more confident. 🐼🎋`;
+Remember: ${name} should leave every conversation feeling smarter, braver, and more confident than when they started. You're not just answering questions — you're growing a learner. 🐼🎋`;
 }
 
 // ══════════════════════════════════════════════════════════════

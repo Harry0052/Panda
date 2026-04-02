@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { motion, useDragControls } from "framer-motion"
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -37,7 +37,7 @@ export function DiagramLabeler({
 }: DiagramLabelerProps) {
   const diagramRef = useRef<HTMLDivElement>(null)
   const [placedLabels, setPlacedLabels] = useState<Map<string, PlacedLabel>>(new Map())
-  const [draggedLabel, setDraggedLabel] = useState<string | null>(null)
+  const [, setDraggedLabel] = useState<string | null>(null)
   const [completed, setCompleted] = useState(false)
   const [score, setScore] = useState(0)
 

@@ -12,7 +12,7 @@ import type {
   RecapBlock,
   HintBlock,
 } from "./lesson-schema";
-import { createLessonState, recordBlockResult, completeLessonState } from "./lesson-schema";
+import { recordBlockResult, completeLessonState } from "./lesson-schema";
 import type { BlockResult } from "./lesson-schema";
 import {
   getAcademicModel,
@@ -35,7 +35,6 @@ export type LessonRecommendation = {
 
 export function getRecommendedLessons(profileId: string, profile: Profile, limit = 6): LessonRecommendation[] {
   const allLessons = lessonPacks;
-  const academicModels = getAcademicModels(profileId);
   const comm = getCommunicationModel(profileId);
   const eng = getEngagementModel(profileId);
 
@@ -154,7 +153,6 @@ export function selectDifficulty(profileId: string, subject: string, subtopic?: 
 
 export function adaptLesson(lesson: LessonDefinition, profileId: string, profile: Profile): LessonDefinition {
   const model = getAcademicModel(profileId, lesson.subject, lesson.subtopic);
-  const comm = getCommunicationModel(profileId);
   const blocks = [...lesson.blocks];
 
   // ── Add welcome hint if frustration is high ──
@@ -211,7 +209,7 @@ export function adaptLesson(lesson: LessonDefinition, profileId: string, profile
   return { ...lesson, blocks };
 }
 
-function getPreBlockHint(block: ActivityBlock, subject: string): string {
+function getPreBlockHint(block: ActivityBlock, _subject: string): string {
   switch (block.type) {
     case "multiple_choice":
       return `Here comes a question! Read all the choices carefully before picking one. Remember, you can take your time.`;

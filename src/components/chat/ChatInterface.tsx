@@ -4,11 +4,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Send,
   Sparkles,
-  Lightbulb,
   Palette,
   Zap,
   ArrowDown,
@@ -136,10 +134,15 @@ export function ChatInterface({
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: "Oops! Panda had a little hiccup. Let's try again!" }
+            ? {
+                ...m,
+                content: "🐼 Oops! Panda couldn't connect right now. This might be because:\n\n• The internet connection dropped\n• The OpenAI API key isn't set\n• The AI service is temporarily busy\n\nDon't worry — your progress is saved! You can browse your dashboard and lessons while we wait.",
+              }
             : m
         )
       );
+      // Store the failed message so user can retry
+      setInput(text.trim());
     } finally {
       setIsStreaming(false);
     }

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     // Default: return the first profile (single-child mode)
     const profile = getFirstProfile();
     if (!profile) {
-      return NextResponse.json({ error: "No profiles found" }, { status: 404 });
+      return NextResponse.json(null);
     }
     return NextResponse.json(profile);
   } catch (err) {

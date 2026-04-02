@@ -323,7 +323,6 @@ export function getSuggestedPrompts(
   profile: Profile,
   learnerModels: LearnerModel[]
 ): string[] {
-  const name = profile.nickname || profile.name;
   const age = profile.age ?? 8;
   const prompts: string[] = [];
 

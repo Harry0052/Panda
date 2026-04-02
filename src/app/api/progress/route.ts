@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getProfileStats,
   getProfile,
+  getLearnerModels,
 } from "@/db/queries";
+import { getSuggestedPrompts } from "@/lib/adaptive-engine";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +21,20 @@ export async function GET(request: NextRequest) {
     }
 
     const stats = getProfileStats(profileId);
-    return NextResponse.json(stats);
+    const learnerModels = getLearnerModels(profileId);
+
+    // Generate personalized suggested prompts with icons
+    const promptTexts = getSuggestedPrompts(profile, learnerModels);
+    const icons = ["🔢", "📖", "✏️", "🔬", "🎯", "🎨", "🌍", "🧠"];
+    const suggestedPrompts = promptTexts.map((text, i) => ({
+      text,
+      icon: icons[i % icons.length],
+    }));
+
+    return NextResponse.json({
+      ...stats,
+      suggestedPrompts,
+    });
   } catch (err) {
     console.error("Progress GET error:", err);
     const message = err instanceof Error ? err.message : "Internal server error";

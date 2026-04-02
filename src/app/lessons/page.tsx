@@ -14,7 +14,6 @@ import {
   Clock,
   ChevronRight,
   Sparkles,
-  ArrowLeft,
 } from "lucide-react";
 import type { LessonDefinition, LessonState } from "@/lib/lesson-schema";
 
