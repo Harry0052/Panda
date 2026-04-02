@@ -1,0 +1,8 @@
+export { MatchingGame } from "./MatchingGame"
+export { FillInTheBlank } from "./FillInTheBlank"
+export { DiagramLabeler } from "./DiagramLabeler"
+export { StepByStep } from "./StepByStep"
+export { QuizCard } from "./QuizCard"
+export { DrawingCanvas } from "./DrawingCanvas"
+export { SequenceOrder } from "./SequenceOrder"
+export { SpellingPractice } from "./SpellingPractice"
