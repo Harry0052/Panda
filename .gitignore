@@ -34,10 +34,12 @@ yarn-error.log*
 .env*
 !.env.example
 
-# local database
+# local database and student files created at runtime
 /data/*.db
 /data/*.db-wal
 /data/*.db-shm
+/data/uploads
+/data/exports
 
 # vercel
 .vercel
